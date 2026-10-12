@@ -36,6 +36,55 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
 
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+  init:
+    build: .
+    env_file:
+      - .env
+
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+
+    command:
+      - sh
+      - -c
+      - python -m scripts.init_db && python -m scripts.import_data && python -m scripts.index_documents
+
+    depends_on:
+      db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+    restart: "no"
+
+  api:
+    build: .
+    container_name: docsearch-api
+
+    env_file:
+      - .env
+
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
 volumes:
   postgres_data:
   elasticsearch_data:
